@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.23)
+project(semestralkaplsplspls C)
+
+set(CMAKE_C_STANDARD 99)
+
+# Add both main.c and functions.c to the executable
+add_executable(semestralkaplsplspls main.c function.c)

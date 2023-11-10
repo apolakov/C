@@ -1,0 +1,3 @@
+D:/C/semestralkaplsplspls/cmake-build-debug/CMakeFiles/semestralkaplsplspls.dir
+D:/C/semestralkaplsplspls/cmake-build-debug/CMakeFiles/edit_cache.dir
+D:/C/semestralkaplsplspls/cmake-build-debug/CMakeFiles/rebuild_cache.dir
