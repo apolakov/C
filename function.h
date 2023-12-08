@@ -53,8 +53,9 @@ int findStringCode(char *str);
 void addStringToDictionary(char *str, int code);
 int hashFunction(char *str);
 char* getStringFromCode(int code);
+unsigned char* readPayloadData(const char* filename, int* size);
 
-void initializeDictionary();
+
 void freeDictionary();
 void addBytesToDictionary(const unsigned char *bytes, int length);
 int findBytesCode(const unsigned char *bytes, int length);
@@ -64,7 +65,15 @@ unsigned char* getBytesFromCode(int code, int *length);
 void setLSB(unsigned char* byte, int bitValue);
 int getBit(const int* data, int size, int position);
 void embedPayload(unsigned char* pixelData, int pixelDataSize, const int* compressedPayload, int compressedSize);
-void extractPayload(unsigned char* pixelData, int pixelDataSize, int* extractedPayload, int compressedSize);
+//void extractPayload(unsigned char* pixelData, int pixelDataSize, int* extractedPayload, int compressedSize);
 unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
+int openAndValidateBMP(const char* filename, BITMAPFILEHEADER* bfh, BITMAPINFOHEADER* bih);
+// Function prototype for reading pixel data from a BMP file
+unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
+int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, unsigned char* pixelData, int pixelDataSize);
+int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressedPayloadSize);
+int extractSizeFromPixelData(unsigned char* pixelData);
+//void saveDecompressedPayload(const char* baseFilename, const unsigned char* decompressedPayload, int decompressedPayloadSize);
+void saveDecompressedPayload(const unsigned char* decompressedPayload, int decompressedPayloadSize);
 
 #endif

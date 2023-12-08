@@ -166,3 +166,57 @@ int analyze_file_format(const char *filename) {
 }
 
 
+/*
+void extractPayload(unsigned char* pixelData, int pixelDataSize, int* extractedPayload, int compressedSize) {
+    int totalBits = compressedSize * 32; // 32 bits per int
+    int bitPosition = 0;
+
+    for (int i = 0; i < pixelDataSize && bitPosition < totalBits; ++i) {
+        // Extract the bit from the LSB of the current byte of the pixel data
+        int bit = pixelData[i] & 1;
+
+        // Place the bit in the correct position in the extracted payload
+        int byteIndex = bitPosition / 32;
+        int bitIndex = bitPosition % 32;
+
+        if (bitIndex == 0) {
+            extractedPayload[byteIndex] = 0; // Initialize to zero before setting bits
+        }
+
+        extractedPayload[byteIndex] |= (bit << bitIndex);
+
+        bitPosition++;
+    }
+
+    // Handle potential underflow or errors
+    if (bitPosition != totalBits) {
+        fprintf(stderr, "Error: Not all payload bits were successfully extracted.\n");
+        // Handle the error, such as aborting the operation
+    }
+}
+ */
+
+/*
+// Function to open a BMP file and validate its format
+FILE* openAndValidateBMP(const char* filename, BITMAPFILEHEADER* bfh, BITMAPINFOHEADER* bih) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        fprintf(stderr, "Unable to open file %s.\n", filename);
+        return NULL;
+    }
+
+    fread(bfh, sizeof(BITMAPFILEHEADER), 1, file);
+    fread(bih, sizeof(BITMAPINFOHEADER), 1, file);
+
+    if (bfh->bfType != 0x4D42) {  // 'BM' in little-endian
+        fprintf(stderr, "Not a BMP file.\n");
+        fclose(file);
+        return NULL;
+    }
+
+    printf("Width: %d\n", bih->width);
+    printf("Height: %d\n", bih->height);
+
+    return file;
+}
+  */

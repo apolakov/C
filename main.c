@@ -8,194 +8,180 @@
 
 int nextAvailableCode = MAX_CHAR; // Variable to track the next available code in LZW compression
 DictionaryEntry *table[TABLE_SIZE]; // Dictionary for LZW compression
+void printLZWCompressedData(const int *compressedData, int compressedSize);
 
-// Function prototype for reading pixel data from a BMP file
-unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
 
-int main() {
-    // Bitmap file and info headers
+        int main() {
+    const char *inputFilename = "../bmp24.bmp";
+    const char *outputFilename = "../output.bmp";
     BITMAPFILEHEADER bfh;
     BITMAPINFOHEADER bih;
-
-    // Open the BMP file
-    FILE *file = fopen("../bmp24.bmp", "rb");
-    if (!file) {
-        fprintf(stderr, "Unable to open file.\n");
-        return 1;
-    }
-
-    // Read the bitmap file and info headers
-    fread(&bfh, sizeof(BITMAPFILEHEADER), 1, file);
-    fread(&bih, sizeof(BITMAPINFOHEADER), 1, file);
-
-    // Ensure this is a BMP file
-    if (bfh.type != 0x4D42) {
-        fprintf(stderr, "Not a BMP file.\n");
-        fclose(file);
-        return 1;
-    }
-
-    // Print image dimensions
-    printf("Width: %d\n", bih.width);
-    printf("Height: %d\n", bih.height);
-
-    // Read pixel data from the BMP file
     int pixelDataSize;
-    unsigned char *pixelData = readPixelData(file, bfh, bih, &pixelDataSize);
+
+    // Analyze the file format to ensure it's a 24-bit BMP file
+    int format = analyze_file_format(inputFilename);
+    if (format != 3) { // If the file is not a 24-bit RGB BMP file
+        fprintf(stderr, "The file is not a 24-bit RGB BMP file.\n");
+        return 1;
+    }
+
+    // Open the file for reading pixel data
+    FILE *inputFile = fopen(inputFilename, "rb");
+    if (!inputFile) {
+        fprintf(stderr, "Failed to open BMP file.\n");
+        return 1;
+    }
+    // Read the headers (they have already been checked by analyze_file_format)
+    fread(&bfh, sizeof(BITMAPFILEHEADER), 1, inputFile);
+    fread(&bih, sizeof(BITMAPINFOHEADER), 1, inputFile);
+
+    unsigned char *pixelData = readPixelData(inputFile, bfh, bih, &pixelDataSize);
+    fclose(inputFile); // Close the file after reading pixel data
+
     if (!pixelData) {
-        // Handle error...
+        fprintf(stderr, "Failed to read pixel data from BMP file.\n");
         return 1;
     }
 
-    // Open the payload file (the file to be embedded in the image)
-    FILE *payloadFile = fopen("../input.png", "rb");
-    if (!payloadFile) {
-        fprintf(stderr, "Failed to open payload file.\n");
-        return 1;
+    const char* payloadFilename = "../png.png";
+
+    unsigned char* payloadData;
+    int payloadSize;
+    payloadData = readPayloadData(payloadFilename, &payloadSize);
+
+
+    int compressedSize = payloadSize; // Initialize to payload size, will be updated by lzwCompress
+    int* compressedPayload = lzwCompress(payloadData, &compressedSize);
+
+    printLZWCompressedData(* compressedPayload, 10);
+    free(payloadData); // Free the original payload data as it is no longer needed
+
+    if (pixelDataSize < compressedSize * 8) {
+        fprintf(stderr, "Not enough space in the image for the payload.\n");
+        return 3;
     }
 
-    // Determine the size of the payload
-    fseek(payloadFile, 0, SEEK_END);
-    long payloadSize = ftell(payloadFile);
-    fseek(payloadFile, 0, SEEK_SET);
-
-    // Allocate memory for the payload
-    unsigned char *payload = malloc(payloadSize);
-    if (!payload) {
-        fprintf(stderr, "Memory allocation failed for payload.\n");
-        fclose(payloadFile);
-        return 1;
-    }
-
-    // Read the payload into memory
-    fread(payload, 1, payloadSize, payloadFile);
-
-    // Compress the payload using LZW algorithm
-    int compressedSize = payloadSize;
-    int *compressedPayload = lzwCompress(payload, &compressedSize);
-    if (!compressedPayload) {
-        fprintf(stderr, "Payload compression failed.\n");
-        free(payload);
-        return 1;
-    }
-
-    // Calculate the number of pixels and bits required for embedding the payload
-    int numberOfPixels = bih.width * abs(bih.height);
-    int bitsNeeded = compressedSize * sizeof(int) * 8;
-    int bitsAvailable = numberOfPixels * 24;
-
-    // Check if the image can store the compressed payload
-    if (bitsAvailable < bitsNeeded) {
-        fprintf(stderr, "Not enough pixels to store the payload.\n");
-        free(payload);
-        free(compressedPayload);
-        return 1;
-    }
-
-    // Embed the compressed payload into the pixel data
     embedPayload(pixelData, pixelDataSize, compressedPayload, compressedSize);
+    free(compressedPayload); // Free the compressed payload as it has been embedded
 
-    // Open a new file to write the modified image with the embedded payload
-    FILE *outputFile = fopen("../output.bmp", "wb");
-    if (!outputFile) {
-        fprintf(stderr, "Unable to open file for writing.\n");
-        free(pixelData);
-        free(compressedPayload);
-        return 1;
-    }
+    saveImage(outputFilename, bfh, bih, pixelData, pixelDataSize);
+    free(pixelData);
 
-    // Write the modified pixel data with the embedded payload to the new file
-    fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, outputFile);
-    fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, outputFile);
-    fwrite(pixelData, 1, pixelDataSize, outputFile);
-
-    // Close the output file
-    fclose(outputFile);
-
-    // Open the file with the embedded payload for reading
-    FILE *modifiedFile = fopen("../output.bmp", "rb");
+    FILE *modifiedFile = fopen(outputFilename, "rb");
     if (!modifiedFile) {
-        fprintf(stderr, "Unable to open modified file.\n");
+        fprintf(stderr, "Failed to open the modified BMP file.\n");
         return 1;
     }
-
-    // Read the modified pixel data
+    // Read the headers again from the modified file
     fread(&bfh, sizeof(BITMAPFILEHEADER), 1, modifiedFile);
     fread(&bih, sizeof(BITMAPINFOHEADER), 1, modifiedFile);
+
+// Read the pixel data from the modified file
     unsigned char *modifiedPixelData = readPixelData(modifiedFile, bfh, bih, &pixelDataSize);
-    if (!modifiedPixelData) {
-        fprintf(stderr, "Failed to read pixel data from modified file.\n");
-        fclose(modifiedFile);
-        return 1;
-    }
-
-    // Allocate memory for the extracted payload
-    int *extractedPayload = malloc(compressedSize * sizeof(int));
-    if (!extractedPayload) {
-        fprintf(stderr, "Memory allocation failed for extracted payload.\n");
-        fclose(modifiedFile);
-        free(modifiedPixelData);
-        return 1;
-    }
-
-    // Extract the payload from the modified image
-    extractPayload(modifiedPixelData, pixelDataSize, extractedPayload, compressedSize);
-
-    // Decompress the extracted payload
-    unsigned char *decompressedData = lzwDecompress(extractedPayload, compressedSize);
-    if (!decompressedData) {
-        fprintf(stderr, "Decompression failed.\n");
-        fclose(modifiedFile);
-        free(modifiedPixelData);
-        free(extractedPayload);
-        return 1;
-    }
-
-    // Save the decompressed data to a file
-    FILE *decompressedFile = fopen("../decompressed_output.dat", "wb");
-    if (!decompressedFile) {
-        fprintf(stderr, "Unable to open file for writing decompressed data.\n");
-        fclose(modifiedFile);
-        free(modifiedPixelData);
-        free(extractedPayload);
-        free(decompressedData);
-        return 1;
-    }
-
-    fwrite(decompressedData, 1, compressedSize, decompressedFile);
-    fclose(decompressedFile);
-
-    // Clean up resources
     fclose(modifiedFile);
-    free(modifiedPixelData);
-    free(extractedPayload);
-    free(decompressedData);
+
+    if (!modifiedPixelData) {
+        fprintf(stderr, "Failed to read pixel data from the modified BMP file.\n");
+        return 1;
+    }
+
+    int compressedPayloadSize;
+    int *extractedCompressedPayload = extractPayload(modifiedPixelData, pixelDataSize, &compressedPayloadSize);
+    free(modifiedPixelData);  // Free the modified pixel data after extracting the payload
+
+    int decompressedPayloadSize;
+    unsigned char* decompressedPayload = lzwDecompress(extractedCompressedPayload, compressedPayloadSize);
+
+
+    saveDecompressedPayload(decompressedPayload, decompressedPayloadSize);
+
+    // Clean up
+    free(extractedCompressedPayload);
 
     return 0;
 }
 
-// Function to open a BMP file and validate its format
-int openAndValidateBMP(const char* filename, BITMAPFILEHEADER* bfh, BITMAPINFOHEADER* bih) {
-    FILE *file = fopen(filename, "rb");
-    if (!file) {
-        fprintf(stderr, "Unable to open file %s.\n", filename);
-        return 0;
+void printLZWCompressedData(const int *compressedData, int compressedSize) {
+    printf("LZW Compressed Data: [");
+    for (int i = 0; i < compressedSize; i++) {
+        printf("%d", compressedData[i]);
+        if (i < compressedSize - 1) {
+            printf(", ");
+        }
     }
-
-    fread(bfh, sizeof(BITMAPFILEHEADER), 1, file);
-    fread(bih, sizeof(BITMAPINFOHEADER), 1, file);
-
-    if (bfh->type != 0x4D42) {
-        fprintf(stderr, "Not a BMP file.\n");
-        fclose(file);
-        return 0;
-    }
-
-    printf("Width: %d\n", bih->width);
-    printf("Height: %d\n", bih->height);
-
-    return (int)(long)file;  // Casting FILE* to int for simplicity
+    printf("]\n");
 }
+
+int extractSizeFromPixelData(unsigned char* pixelData) {
+    // Assuming the size is stored in the first 32 bits (4 bytes)
+    // Each LSB of the first 32 bytes of pixel data represents one bit of the size integer
+    int size = 0;
+    for (int i = 0; i < 32; ++i) {
+        size |= ((pixelData[i] & 0x01) << i); // Extract the LSB and shift it to the correct position
+    }
+    return size;
+}
+
+
+int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressedPayloadSize) {
+    int payloadBitSize = extractSizeFromPixelData(pixelData);
+    *compressedPayloadSize = (payloadBitSize + 31) / 32; // Calculate size in ints
+
+    int* payload = (int*)malloc(*compressedPayloadSize * sizeof(int));
+    if (!payload) {
+        fprintf(stderr, "Memory allocation failed for payload extraction.\n");
+        return NULL;
+    }
+
+    memset(payload, 0, *compressedPayloadSize * sizeof(int)); // Initialize payload to zeros
+
+    int payloadIndex = 0; // Index in the payload array
+    int bitPosition = 0;  // Bit position within the current integer
+
+    // Start extracting payload bits from the 33rd byte, as we assume the first 32 bytes contain the payload size
+    for (int i = 32; i < pixelDataSize && payloadIndex < *compressedPayloadSize; ++i) {
+        // Extract LSB from the blue channel
+        int bit = pixelData[i] & 0x01;
+        payload[payloadIndex] |= (bit << bitPosition); // Set the appropriate bit in the payload
+
+        // Update bit position and payload index
+        bitPosition++;
+        if (bitPosition == 32) { // Move to the next integer when we have filled one up
+            bitPosition = 0;
+            payloadIndex++;
+        }
+    }
+
+    return payload;
+}
+
+unsigned char* readPayloadData(const char* filename, int* size) {
+    FILE* file = fopen(filename, "rb"); // Open the file in binary mode
+    if (!file) {
+        fprintf(stderr, "Unable to open payload file.\n");
+        return NULL;
+    }
+
+    // Seek to the end of the file to determine the size
+    fseek(file, 0, SEEK_END);
+    *size = ftell(file);
+    fseek(file, 0, SEEK_SET); // Seek back to the beginning of the file
+
+    // Allocate memory for the payload data
+    unsigned char* data = (unsigned char*)malloc(*size);
+    if (!data) {
+        fprintf(stderr, "Memory allocation failed for payload data.\n");
+        fclose(file);
+        return NULL;
+    }
+
+    // Read the file into memory
+    fread(data, 1, *size, file);
+    fclose(file); // Close the file
+
+    return data;
+}
+
 
 // Function to initialize the dictionary for LZW compression
 void initializeDictionary() {
@@ -217,6 +203,7 @@ void initializeDictionary() {
     }
     nextAvailableCode = MAX_CHAR; // Start adding new byte arrays from here
 }
+
 
 // Function to free the dictionary used in LZW compression
 void freeDictionary() {
@@ -458,30 +445,57 @@ void embedPayload(unsigned char* pixelData, int pixelDataSize, const int* compre
     }
 }
 
-void extractPayload(unsigned char* pixelData, int pixelDataSize, int* extractedPayload, int compressedSize) {
-    int totalBits = compressedSize * 32; // 32 bits per int
-    int bitPosition = 0;
-
-    for (int i = 0; i < pixelDataSize && bitPosition < totalBits; ++i) {
-        // Extract the bit from the LSB of the current byte of the pixel data
-        int bit = pixelData[i] & 1;
-
-        // Place the bit in the correct position in the extracted payload
-        int byteIndex = bitPosition / 32;
-        int bitIndex = bitPosition % 32;
-
-        if (bitIndex == 0) {
-            extractedPayload[byteIndex] = 0; // Initialize to zero before setting bits
-        }
-
-        extractedPayload[byteIndex] |= (bit << bitIndex);
-
-        bitPosition++;
+int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, unsigned char* pixelData, int pixelDataSize) {
+    FILE* file = fopen(filename, "wb");  // Open the file in binary write mode
+    if (!file) {
+        fprintf(stderr, "Unable to open output file.\n");
+        return 0;  // Return 0 on failure
     }
 
-    // Handle potential underflow or errors
-    if (bitPosition != totalBits) {
-        fprintf(stderr, "Error: Not all payload bits were successfully extracted.\n");
-        // Handle the error, such as aborting the operation
+    // Write the BMP file header
+    fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, file);
+
+    // Write the BMP info header
+    fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, file);
+
+    // Write the pixel data
+    fwrite(pixelData, 1, pixelDataSize, file);
+
+    fclose(file);  // Close the file
+
+    return 1;  // Return 1 on success
+}
+
+void saveDecompressedPayload(const unsigned char* decompressedPayload, int decompressedPayloadSize) {
+    if (decompressedPayloadSize < 4) {
+        fprintf(stderr, "Decompressed payload is too small to contain a valid file extension.\n");
+        return;
     }
+
+    // Extract the file extension from the decompressed payload
+    char fileExtension[5];
+    strncpy(fileExtension, (const char*)decompressedPayload, 4);
+    fileExtension[4] = '\0';  // Ensure null termination
+
+    // Construct the filename with a fixed prefix and the extracted extension
+    char filename[260];
+    snprintf(filename, sizeof(filename), "result_%s", fileExtension);
+
+    // Debug print the filename
+    printf("Attempting to save to file: '%s'\n", filename);
+
+    // Open the file for writing
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        perror("Error opening file");  // This will print a more descriptive error message
+        return;
+    }
+
+    // Write the payload to the file, skipping the first 4 bytes which contain the file extension
+    size_t written = fwrite(decompressedPayload + 4, 1, decompressedPayloadSize - 4, file);
+    if (written != decompressedPayloadSize - 4) {
+        fprintf(stderr, "Error writing to file '%s'. Written: %zu, Expected: %d\n", filename, written, decompressedPayloadSize - 4);
+    }
+
+    fclose(file);
 }
