@@ -72,8 +72,8 @@ int openAndValidateBMP(const char* filename, BITMAPFILEHEADER* bfh, BITMAPINFOHE
 unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
 int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, unsigned char* pixelData, int pixelDataSize);
 int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressedPayloadSize);
-int extractSizeFromPixelData(unsigned char* pixelData);
+unsigned int extractSizeFromPixelData(unsigned char* pixelData);
 //void saveDecompressedPayload(const char* baseFilename, const unsigned char* decompressedPayload, int decompressedPayloadSize);
 void saveDecompressedPayload(const unsigned char* decompressedPayload, int decompressedPayloadSize);
-
+int compareFiles(const char *file1, const char *file2);
 #endif
