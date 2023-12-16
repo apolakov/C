@@ -1,124 +1,101 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <png.h>
 #include "function.h"
 
-#define TABLE_SIZE 16384 // Size of the dictionary used in LZW compression
-#define MAX_CHAR 256 // Maximum number of characters (ASCII range)
+#define TABLE_SIZE 16384
+#define MAX_CHAR 256
 
-void embedSize(unsigned char* pixelData, int size);
+void embedSize(Pixel* pixels, unsigned int size);
+int determineFileTypeAndCheck24Bit(const char *filename);
+//int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize);
+//int extractAndDecompressPayload(const char* inputImageFilename, const char* outputPayloadFilename);
+unsigned char* lzwDecompress(const int *codes, int size, int* decompressedSize);
+int comparePayloads(const int* payload1, const int* payload2, int size);
+int* loadOriginalCompressedPayload(const char* filename, int* size);
+int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize, const char* payloadFilename);
+int embedFileType(Pixel* pixels, const char* fileType);
+int extractFileType(Pixel* pixels, char* fileType);
+int extractAndDecompressPayload(const char* inputImageFilename, char* outputPayloadFilename);
+const char* getFileExtension(const char* filename);
 
 
 int main() {
-    const char *inputFilename = "../bmp24.bmp";
-    const char *outputFilename = "../output.bmp";
-    BITMAPFILEHEADER bfh;
-    BITMAPINFOHEADER bih;
-    int pixelDataSize;
+    const char* imageFilename = "../bmp24.bmp";
+    const char* payloadFilename = "../k.txt";
+    const char* outputImageFilename = "../output.bmp";
+    const char* decompressedPayloadBaseFilename = "../PAYLOAD2";
 
-    // Open and read the original BMP file
-    FILE *inputFile = fopen(inputFilename, "rb");
-    if (!inputFile) {
-        fprintf(stderr, "Failed to open input BMP file.\n");
+    // Step 1: Determine file type and check if it's 24-bit
+    if (determineFileTypeAndCheck24Bit(imageFilename)) {
+        fprintf(stderr, "File is not a 24-bit BMP or PNG.\n");
         return 1;
     }
-    fread(&bfh, sizeof(BITMAPFILEHEADER), 1, inputFile);
-    fread(&bih, sizeof(BITMAPINFOHEADER), 1, inputFile);
-    unsigned char *pixelData = readPixelData(inputFile, bfh, bih, &pixelDataSize);
-    fclose(inputFile);
 
-    // Embed a known payload into the pixel data
-    int originalPayload[] = {0x12345678, 0x9ABCDEF0};  // Example known payload
-    int compressedSize = sizeof(originalPayload) / sizeof(originalPayload[0]);
-
-    int sizeToEmbed = compressedSize * 32; // Assuming each int is 32 bits
-    embedSize(pixelData, sizeToEmbed);
-    embedPayload(pixelData, pixelDataSize, originalPayload, compressedSize);
-
-    // Save the modified pixel data to a new BMP file
-    FILE *outputFile = fopen(outputFilename, "wb");
-    if (!outputFile) {
-        fprintf(stderr, "Failed to open output BMP file.\n");
-        free(pixelData);
+    // Step 2: Load payload
+    int payloadSize;
+    unsigned char* payloadData = readPayloadData(payloadFilename, &payloadSize);
+    if (!payloadData) {
+        fprintf(stderr, "Failed to load payload data.\n");
         return 1;
     }
-    fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, outputFile);
-    fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, outputFile);
-    fwrite(pixelData, pixelDataSize, 1, outputFile);
-    fclose(outputFile);
-    free(pixelData);
 
-    // Read the new BMP file and extract its pixel data
-    FILE *modifiedFile = fopen(outputFilename, "rb");
-    if (!modifiedFile) {
-        fprintf(stderr, "Failed to open modified BMP file.\n");
+    // Step 3: Compress payload
+    int compressedSize = payloadSize;
+    int* compressedPayload = lzwCompress(payloadData, &compressedSize);
+    free(payloadData);
+
+    if (!compressedPayload) {
+        fprintf(stderr, "Compression failed.\n");
         return 1;
     }
-    fread(&bfh, sizeof(BITMAPFILEHEADER), 1, modifiedFile);
-    fread(&bih, sizeof(BITMAPINFOHEADER), 1, modifiedFile);
-    unsigned char *modifiedPixelData = readPixelData(modifiedFile, bfh, bih, &pixelDataSize);
-    fclose(modifiedFile);
 
-    // Extract the payload from the modified pixel data
-    int extractedPayloadSize;
-    int* extractedPayload = extractPayload(modifiedPixelData, pixelDataSize, &extractedPayloadSize);
 
-    // Validate the extracted payload
-    if (extractedPayloadSize != compressedSize) {
-        printf("extractedPayloadSize %d \n", extractedPayloadSize);
-        printf("compressedSize %d \n", compressedSize);
-        fprintf(stderr, "Error: Extracted payload size does not match the original.\n");
+    // Step 4: Embed payload into image and save the output image
+    if (embedPayloadInImage(imageFilename, outputImageFilename, compressedPayload, compressedSize, payloadFilename) != 0) {        fprintf(stderr, "Failed to embed payload into image or create output image.\n");
+        free(compressedPayload);
+        return 1;
+    }
+    free(compressedPayload);
+
+    printf("Hiding is done.\n");
+
+    // Step 5: Extract and decompress payload from image
+    if (!extractAndDecompressPayload(outputImageFilename, decompressedPayloadBaseFilename)) {
+        fprintf(stderr, "Failed to extract and decompress payload from image.\n");
+        return 1;
+    }
+
+    // Step 6: Load original compressed payload and compare
+    int originalCompressedSize;
+    int* originalCompressedPayload = loadOriginalCompressedPayload("../compressed_payload_original.bin", &originalCompressedSize);
+    if (originalCompressedPayload) {
+        if (comparePayloads(compressedPayload, originalCompressedPayload, originalCompressedSize)) {
+            printf("Extraction verification successful: The payloads match.\n");
+        } else {
+            fprintf(stderr, "Extraction verification failed: The payloads do not match.\n");
+        }
+        free(originalCompressedPayload);
     } else {
-        int validPayload = 1;
-        for (int i = 0; i < compressedSize; i++) {
-            if (originalPayload[i] != extractedPayload[i]) {
-                fprintf(stderr, "Error: Extracted payload does not match the original at index %d.\n", i);
-                validPayload = 0;
-                break;
-            }
-        }
-        if (validPayload) {
-            printf("Success: Extracted payload matches the original payload.\n");
-        }
+        fprintf(stderr, "Failed to load original compressed payload.\n");
     }
-
-    free(modifiedPixelData);
-    free(extractedPayload);
 
     return 0;
 }
 
 
-
-
-unsigned int extractSizeFromPixelData(unsigned char* pixelData) {
+unsigned int extractSizeFromPixelData(const Pixel* pixels, int numPixels) {
     unsigned int size = 0;
-    int bitIndex = 0;
-    for (int i = 2; i < 96; i += 3) {
-        unsigned int bit = pixelData[i] & 1;
-        printf("Byte %d (value %02x), Extracted bit: %u, Current size: %u\n", i, pixelData[i], bit, size);
-        if (bitIndex < 32) {
-            size |= (bit << bitIndex);
-        }
-        bitIndex++;
-        if (bitIndex >= 32) {
-            break;
-        }
+    for (int i = 0; i < 32; ++i) {
+        unsigned int bit = pixels[i].blue & 1;
+        size |= (bit << i);
     }
-    printf("Final extracted size: %u\n", size);
     return size;
 }
 
-
-
-int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressedPayloadSize) {
-    printf("PixelSize in the beginning: %d\n", pixelDataSize); // 260064
-    unsigned int payloadBitSize = extractSizeFromPixelData(pixelData);
-    printf("Extracted payload bit size: %u\n", payloadBitSize);
-    if (payloadBitSize <= 0 || payloadBitSize > (pixelDataSize * 8)) {
-        fprintf(stderr, "Error: Invalid payload bit size extracted.\n");
-        return NULL;
-    }
+int* extractPayload(const Pixel* pixels, int numPixels, int* compressedPayloadSize) {
+    unsigned int payloadBitSize = extractSizeFromPixelData(pixels, numPixels);
     *compressedPayloadSize = (payloadBitSize + 31) / 32;
 
     int* payload = (int*)malloc(*compressedPayloadSize * sizeof(int));
@@ -128,112 +105,300 @@ int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressed
     }
 
     memset(payload, 0, *compressedPayloadSize * sizeof(int));
+    int payloadIndex = 0, bitPosition = 0;
 
-    int payloadIndex = 0;
+    // Start extracting from pixel 32, skipping the first 32 pixels used for the size
+    for (int i = 32; i < numPixels && payloadIndex < *compressedPayloadSize; ++i) {
+        int bit = pixels[i].blue & 1;
+        //printf("Extracting bit %d from pixel %d\n", bit, i); // Debugging statement
+        payload[payloadIndex] |= (bit << bitPosition);
+        //printf("Extracting bit %d from pixel %d. Index: %d, BitPos: %d\n", bit, i, payloadIndex, bitPosition);
 
-    for (int i = 96; i < pixelDataSize * 8 && payloadIndex < *compressedPayloadSize * 32; i++) {
-        int pixelIndex = (i - 96) / 8; // Calculate the index of the pixel
-        int bit = (pixelData[pixelIndex * 3 + 2] & 1); // Extract LSB from the blue channel
-        payload[payloadIndex / 32] |= (bit << (payloadIndex % 32));
-        payloadIndex++;
+        bitPosition++;
+        if (bitPosition == 32) {
+            bitPosition = 0;
+            payloadIndex++;
+        }
     }
-
-    printf("PixelSize in the end of the extract payload function: %d\n", pixelDataSize);
 
     return payload;
 }
 
 
 
-// Function to read pixel data from a BMP file
-unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize) {
-    // Calculate the padding for each row
-    int padding = (4 - (bih.width * 3) % 4) % 4;
+Pixel* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize) {
+    // Calculate the padding for each row (BMP rows are aligned to 4-byte boundaries)
+    int padding = (4 - (bih.width * sizeof(Pixel)) % 4) % 4;
 
-    // Calculate the total size of the pixel data including padding
-    *pixelDataSize = (bih.width * 3 + padding) * abs(bih.height);
+    // Calculate the size of the pixel data (including padding)
+    *pixelDataSize = bih.width * abs(bih.height) * sizeof(Pixel) + padding * abs(bih.height);
 
     // Allocate memory for pixel data
-    unsigned char *pixelData = malloc(*pixelDataSize);
+    Pixel* pixelData = (Pixel*)malloc(*pixelDataSize);
     if (!pixelData) {
         fprintf(stderr, "Memory allocation failed for pixel data.\n");
         fclose(file);
         return NULL;
     }
 
-    // Read the pixel data from the file
-    fseek(file, bfh.offset, SEEK_SET); // Go to the start of the pixel data
-    for (int i = 0; i < abs(bih.height); i++) {
-        // Calculate the position to read into
-        unsigned char* rowData = pixelData + (bih.width * 3 + padding) * i;
+    // Set the file position to the beginning of pixel data
+    fseek(file, bfh.offset, SEEK_SET);
 
-        // Read one row of pixels at a time
-        size_t bytesRead = fread(rowData, 3, bih.width, file);
-        if (bytesRead != bih.width) {
+    // Read pixel data row by row
+    for (int i = 0; i < abs(bih.height); ++i) {
+        // Read one row of pixel data
+        if (fread(pixelData + (bih.width * i), sizeof(Pixel), bih.width, file) != bih.width) {
             fprintf(stderr, "Failed to read pixel data.\n");
-            free(pixelData);
+            free(pixelData);  // Free allocated memory in case of read error
             fclose(file);
             return NULL;
         }
-        fseek(file, padding, SEEK_CUR); // Skip the padding
+        // Skip over padding
+        fseek(file, padding, SEEK_CUR);
     }
 
     return pixelData;
 }
 
 void setLSB(unsigned char* byte, int bitValue) {
-    if (bitValue == 0) {
-        *byte &= 0xFE; // Clear the LSB (1111 1110)
-    } else {
-        *byte |= 0x01; // Set the LSB (0000 0001)
-    }
+    // Ensure the bitValue is either 0 or 1
+    bitValue = (bitValue != 0) ? 1 : 0;
+
+    // Set or clear the LSB
+    *byte = (*byte & 0xFE) | bitValue;
 }
 
 int getBit(const int* data, int size, int position) {
-    int byteIndex = position / 32; // There are 32 bits in an int
+    int byteIndex = position / 32;
     int bitIndex = position % 32;
-    if (byteIndex < size) {
-        return (data[byteIndex] >> bitIndex) & 1;
+
+    if (byteIndex >= size) {
+        return 0; // Out of bounds check
     }
-    return 0; // Return 0 if position is outside the data size
+
+    return (data[byteIndex] >> bitIndex) & 1;
 }
 
-void embedPayload(unsigned char* pixelData, int pixelDataSize, const int* compressedPayload, int compressedSize) {
-    int totalBits = compressedSize * 32;  // Total bits in the compressed payload
-    int availableBits = pixelDataSize / 3;  // Only one out of every three bytes (blue channel)
-
-    printf("Total bits in payload: %d\n", totalBits);
-    printf("Available bits in image: %d\n", availableBits);
-
+void embedPayload(Pixel* pixels, int numPixels, const int* compressedPayload, int compressedSize) {
+    int totalBits = compressedSize * 32;
+    int availableBits = (numPixels - 32) * 8; // Assuming first 32 pixels store metadata
 
     if (totalBits > availableBits) {
         fprintf(stderr, "Error: Not enough space in the image to embed the payload.\n");
-        return;  // Insufficient space
+        return;
     }
 
-    int bitPosition = 0;
-
-    for (int i = 2; i < pixelDataSize && bitPosition < totalBits; i += 3) {
+    // Start embedding the payload after the metadata pixels
+    for (int i = 0, bitPosition = 0; i < numPixels && bitPosition < totalBits; ++i) {
         int bit = getBit(compressedPayload, compressedSize, bitPosition++);
-        setLSB(&pixelData[i], bit); // Modify the LSB of the blue channel
+        setLSB(&pixels[i + 32].blue, bit); // Start after metadata pixels
     }
-    printf("Embedded Data (first 32 bytes):\n");
-    for (int i = 0; i < 32; ++i) {
-        printf("%02x ", pixelData[i]);
-    }
-    printf("\n");
-    printf("Embedded size: %d\n", pixelDataSize); // After embedding the size
-
 }
 
-void embedSize(unsigned char* pixelData, int size) {
-    for (int i = 0; i < 32; i++) {
-        int bit = (size >> i) & 1;
-        if (bit == 1) {
-            pixelData[i] = pixelData[i] | 1;  // Set the LSB
-        } else {
-            pixelData[i] = pixelData[i] & (~1); // Clear the LSB
+
+void embedSize(Pixel* pixels, unsigned int size) {
+    for (int i = 0; i < 32; ++i) {
+        setLSB(&pixels[i].blue, (size >> i) & 1);
+    }
+}
+
+int embedFileType(Pixel* pixels, const char* fileType) {
+    for (int i = 0; i < 24; ++i) {
+        int bit = (fileType[i / 8] >> (i % 8)) & 1;
+        setLSB(&pixels[i].blue, bit);
+    }
+    return 0;
+}
+
+int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize, const char* payloadFilename) {
+    BITMAPFILEHEADER bfh;
+    BITMAPINFOHEADER bih;
+    int pixelDataSize;
+
+    // Open the BMP file
+    FILE *inputFile = fopen(imageFilename, "rb");
+    if (!inputFile) {
+        fprintf(stderr, "Failed to open BMP file.\n");
+        return 1;
+    }
+
+    // Read the headers
+    fread(&bfh, sizeof(BITMAPFILEHEADER), 1, inputFile);
+    fread(&bih, sizeof(BITMAPINFOHEADER), 1, inputFile);
+
+    // Calculate the row padding
+    int padding = (4 - (bih.width * 3) % 4) % 4;
+
+    // Calculate the total pixel data size, including padding
+    pixelDataSize = (bih.width * 3 + padding) * abs(bih.height);
+
+    Pixel *pixels = readPixelData(inputFile, bfh, bih, &pixelDataSize);
+    fclose(inputFile);
+    if (!pixels) {
+        fprintf(stderr, "Failed to read pixel data.\n");
+        return 1;
+    }
+
+    // Extract the file type from the payload filename
+    const char* fileType = getFileExtension(payloadFilename); // payloadFilename needs to be accessible here
+
+    // Check if fileType is not empty
+    if (strlen(fileType) == 0) {
+        fprintf(stderr, "File type extraction failed.\n");
+        free(pixels);
+        return 1;
+    }
+
+
+    // Embed file type
+    if (embedFileType(pixels, fileType) != 0) {
+        fprintf(stderr, "Failed to embed file type.\n");
+        free(pixels);
+        return 1;
+    }
+
+    int numPixels = pixelDataSize / sizeof(Pixel);
+    int payloadBits = compressedSize * 32; // Payload size in bits
+    int availableBits = numPixels * 8 - 32; // Available bits for payload, minus 32 for the size
+
+    // Check if payload fits into the image
+    if (payloadBits > availableBits) {
+        fprintf(stderr, "Not enough space in the image for the payload.\n");
+        free(pixels);
+        return 1;
+    }
+
+    // Embed payload size and payload into the image
+    int sizeToEmbed = payloadBits;
+    embedSize(pixels, sizeToEmbed);
+    embedPayload(pixels + 24, numPixels - 24, compressedPayload, compressedSize);
+
+    // Save the modified image
+    if (!saveImage(outputImageFilename, bfh, bih, (unsigned char*)pixels, pixelDataSize)) {
+        fprintf(stderr, "Failed to create output image with embedded payload.\n");
+        free(pixels);
+        return 1;
+    }
+
+    free(pixels);
+    return 0;
+}
+
+
+
+int extractAndDecompressPayload(const char* inputImageFilename, char* outputPayloadBaseFilename) {    // Step 1: Read the image and extract pixel data
+    BITMAPFILEHEADER bfh;
+    BITMAPINFOHEADER bih;
+    int pixelDataSize;
+    FILE* inputFile = fopen(inputImageFilename, "rb");
+    if (!inputFile) {
+        fprintf(stderr, "Failed to open BMP file.\n");
+        return 1;
+    }
+    fread(&bfh, sizeof(BITMAPFILEHEADER), 1, inputFile);
+    fread(&bih, sizeof(BITMAPINFOHEADER), 1, inputFile);
+    Pixel* pixels = readPixelData(inputFile, bfh, bih, &pixelDataSize);
+    fclose(inputFile);
+    if (!pixels) {
+        fprintf(stderr, "Failed to read pixel data.\n");
+        return 1;
+    }
+
+
+    char fileType[4]; // Assuming fileType is 3 characters + null terminator
+    if (extractFileType(pixels, fileType) != 0) {
+        fprintf(stderr, "Failed to extract file type.\n");
+        free(pixels);
+        return 1;
+    }
+
+    // Construct the correct output filename based on the extracted file type
+    char outputPayloadFilename[256]; // Adjust size as necessary
+    snprintf(outputPayloadFilename, sizeof(outputPayloadFilename), "%s.%s", outputPayloadBaseFilename, fileType);
+
+
+    // Step 2: Extract compressed payload from pixel data
+    int compressedPayloadSize;
+    int* compressedPayload = extractPayload(pixels + 24, (pixelDataSize / sizeof(Pixel)) - 24, &compressedPayloadSize);
+    free(pixels);
+    if (!compressedPayload) {
+        fprintf(stderr, "Failed to extract payload.\n");
+        return 1;
+    }
+
+    // Step 3: Decompress payload
+    int decompressedPayloadSize; // Variable to store the size of the decompressed data
+    unsigned char* decompressedPayload = lzwDecompress(compressedPayload, compressedPayloadSize, &decompressedPayloadSize); // Modified call
+    free(compressedPayload);
+    if (!decompressedPayload) {
+        fprintf(stderr, "Failed to decompress payload.\n");
+        return 1;
+    }
+
+    // Step 4: Save the decompressed payload to a file
+    FILE* outputFile = fopen(outputPayloadFilename, "wb");
+    if (!outputFile) {
+        fprintf(stderr, "Failed to open output file for decompressed payload.\n");
+        free(decompressedPayload);
+        return 1;
+    }
+    fwrite(decompressedPayload, 1, decompressedPayloadSize, outputFile);
+    fclose(outputFile);
+    free(decompressedPayload);
+
+    return 0; // Success
+}
+
+int extractFileType(Pixel* pixels, char* fileType) {
+    // Extract a 3-character file type from the first 24 pixels
+    for (int i = 0; i < 24; ++i) {
+        int bit = pixels[i].blue & 1;
+        fileType[i / 8] |= (bit << (i % 8));
+    }
+    fileType[3] = '\0'; // Null-terminate the string
+    return 0;
+}
+
+const char* getFileExtension(const char* filename) {
+    const char* dot = strrchr(filename, '.');
+    if (!dot || dot == filename) return ""; // No extension found
+    return dot + 1; // Skip the dot
+}
+
+// Function to load the original compressed payload from a file
+int* loadOriginalCompressedPayload(const char* filename, int* size) {
+    FILE* file = fopen(filename, "rb");
+    if (file == NULL) {
+        perror("Error opening original compressed payload file");
+        return NULL;
+    }
+
+    // Get the file size
+    fseek(file, 0, SEEK_END);
+    *size = ftell(file) / sizeof(int);
+    fseek(file, 0, SEEK_SET);
+
+    // Allocate memory for the original compressed data
+    int* data = (int*)malloc(*size * sizeof(int));
+    if (data == NULL) {
+        fprintf(stderr, "Memory allocation failed for original compressed payload.\n");
+        fclose(file);
+        return NULL;
+    }
+
+    // Load the data
+    fread(data, sizeof(int), *size, file);
+    fclose(file);
+    return data;
+}
+
+// Function to compare two blocks of memory
+int comparePayloads(const int* payload1, const int* payload2, int size) {
+    for (int i = 0; i < size; i++) {
+        if (payload1[i] != payload2[i]) {
+            printf("Mismatch at index %d: %d != %d\n", i, payload1[i], payload2[i]);
+            return 0; // Return 0 if mismatch
         }
     }
-    printf("Size being embedded: %d\n", size);
+    return 1; // Return 1 if match
 }

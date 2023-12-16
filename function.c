@@ -55,68 +55,81 @@ int findBytesCode(const unsigned char *bytes, int length) {
 }
 
 
-
 // Function to decompress data using LZW algorithm
-unsigned char* lzwDecompress(const int *codes, int size) {
+unsigned char* lzwDecompress(const int *codes, int size, int* decompressedSize) {
     // Initialize the dictionary for decompression
     initializeDictionary();
 
-    int bufferSize = TABLE_SIZE; // Initial buffer size for decompressed data
-    char *decompressed = (char *)malloc(bufferSize * sizeof(char)); // Allocate memory for decompressed data
+    // The initial buffer size should be enough for most cases, adjust if necessary
+    int bufferSize = TABLE_SIZE;
+    unsigned char *decompressed = (unsigned char *)malloc(bufferSize);
     if (decompressed == NULL) {
         fprintf(stderr, "Failed to allocate memory for decompression.\n");
         exit(EXIT_FAILURE);
     }
-    decompressed[0] = '\0'; // Null-terminate the decompressed string
 
-    int prevCode = codes[0]; // Previous code
-    char prevString[MAX_CHAR] = {0}; // Buffer for previous string
-    int length; // Variable to store the length of the byte sequence
-    unsigned char* byteData = getBytesFromCode(prevCode, &length); // Get byte sequence from code
-    memcpy(prevString, byteData, length); // Copy byte sequence to previous string
-    prevString[length] = '\0'; // Null-terminate the string
-    strncat(decompressed, prevString, bufferSize - strlen(decompressed) - 1); // Append to decompressed data
+    int outputIndex = 0; // This will track the position in the decompressed output
+    int prevCode = codes[0];
+    int length;
+    unsigned char* prevData = getBytesFromCode(prevCode, &length);
 
-    // Main decompression loop
+    // Copy the first code's data to the decompressed output
+    if (prevData && length <= bufferSize) {
+        memcpy(decompressed, prevData, length);
+        outputIndex += length;
+    }
+
     for (int i = 1; i < size; i++) {
-        int currentCode = codes[i]; // Current code
-        char currentString[MAX_CHAR] = {0}; // Buffer for current string
+        int currentCode = codes[i];
+        unsigned char* currentData = getBytesFromCode(currentCode, &length);
 
-        unsigned char* byteData = getBytesFromCode(currentCode, &length); // Get byte sequence from code
-        if (byteData != NULL) {
-            memcpy(currentString, byteData, length); // Copy byte sequence to current string
-            currentString[length] = '\0'; // Null-terminate the string
-        } else {
-            // Special case: code not found in dictionary
-            strncpy(currentString, prevString, MAX_CHAR - 1); // Copy previous string to current string
-            currentString[strlen(currentString) + 1] = '\0'; // Null-terminate the string
-            currentString[strlen(currentString)] = prevString[0]; // Append the first character of previous string
-        }
-
-        // Check buffer size and expand if necessary
-        if (strlen(decompressed) + strlen(currentString) + 1 > bufferSize) {
+        // Ensure the buffer is big enough for the next sequence
+        if (outputIndex + length > bufferSize) {
             bufferSize *= 2; // Double the buffer size
-            char *temp = realloc(decompressed, bufferSize * sizeof(char)); // Reallocate memory for decompressed data
+            unsigned char *temp = (unsigned char *)realloc(decompressed, bufferSize);
             if (temp == NULL) {
                 free(decompressed);
-                fprintf(stderr, "Failed to reallocate memory for decompression.\n");
+                fprintf(stderr, "Memory reallocation failed for decompressed data.\n");
                 exit(EXIT_FAILURE);
             }
             decompressed = temp;
         }
 
-        strncat(decompressed, currentString, bufferSize - strlen(decompressed) - 1); // Append current string to decompressed data
+        // Handle the special case when the current code is not yet in the dictionary
+        if (currentData == NULL) {
+            // The sequence is the previous sequence plus its first byte
+            currentData = prevData;
+            length++;
+            if (outputIndex + length > bufferSize) {
+                bufferSize *= 2; // Double the buffer size
+                unsigned char *temp = (unsigned char *)realloc(decompressed, bufferSize);
+                if (temp == NULL) {
+                    free(decompressed);
+                    fprintf(stderr, "Memory reallocation failed for decompressed data.\n");
+                    exit(EXIT_FAILURE);
+                }
+                decompressed = temp;
+            }
+            decompressed[outputIndex + length - 1] = decompressed[outputIndex - length];
+        }
 
-        // Add new entry to dictionary
-        char newEntry[MAX_CHAR] = {0}; // Buffer for new dictionary entry
-        snprintf(newEntry, sizeof(newEntry), "%s%c", prevString, currentString[0]); // Create new entry combining previous and current strings
-        addBytesToDictionary((unsigned char *)newEntry, strlen(newEntry)); // Add new entry to dictionary
+        // Copy the current sequence to the output
+        memcpy(decompressed + outputIndex, currentData, length);
+        outputIndex += length;
 
-        strcpy(prevString, currentString); // Update previous string for next iteration
+        // Add the new sequence (currentData + the first byte of currentData) to the dictionary
+        if (nextAvailableCode < TABLE_SIZE) {
+            addBytesToDictionary(currentData, length);
+        }
+
+        // Update prevData
+        prevData = currentData;
     }
 
-    return (unsigned char*)decompressed; // Return the decompressed data
+    *decompressedSize = outputIndex; // Set the true size of the decompressed data
+    return decompressed; // Return the decompressed data
 }
+
 
 unsigned char* getBytesFromCode(int code, int *length) {
     if (code >= 0 && code < nextAvailableCode && table[code]) {
@@ -532,11 +545,11 @@ int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, 
 
     for (int i = 0; i < abs(bih.height); i++) {
         // Calculate the position to write from
-        unsigned char* rowData = pixelData + (bih.width * 3 + padding) * i;
+        unsigned char* rowData = pixelData + (bih.width * 3) * i;
 
         // Write one row of pixels at a time
-        size_t bytesWritten = fwrite(rowData, 3, bih.width, file);
-        if (bytesWritten != bih.width) {
+        size_t bytesWritten = fwrite(rowData, 1, bih.width * 3, file);
+        if (bytesWritten != bih.width * 3) {
             fprintf(stderr, "Failed to write pixel data.\n");
             fclose(file);
             return 0;
@@ -549,6 +562,7 @@ int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, 
     fclose(file);
     return 1;
 }
+
 
 unsigned char* readPayloadData(const char* filename, int* size) {
     FILE* file = fopen(filename, "rb"); // Open the file in binary mode
@@ -690,3 +704,25 @@ unsigned char* readPayloadData(const char* filename, int* size) {
     // Clean up
     free(extractedCompressedPayload);
     */
+
+int determineFileTypeAndCheck24Bit(const char *filename) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("File opening failed");
+        return 1; // Return 1 to indicate failure
+    }
+
+    int fileTypeCheck = 1; // Default to 1 (failure)
+
+    if (is_png(file) && is_24bit_png(file)) {
+        fileTypeCheck = 0; // It's a 24-bit PNG file
+    } else {
+        rewind(file); // Necessary for BMP check
+        if (is_bmp(file) && is_24bit_bmp(file)) {
+            fileTypeCheck = 0; // It's a 24-bit BMP file
+        }
+    }
+
+    fclose(file);
+    return fileTypeCheck;
+}

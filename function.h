@@ -38,9 +38,17 @@ typedef struct {
 } BITMAPINFOHEADER;
 #pragma pack(pop)
 
+typedef struct {
+    unsigned char blue;
+    unsigned char green;
+    unsigned char red;
+} Pixel;
 
 
-
+Pixel* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
+//int* extractPayload(Pixel* pixels, int numPixels, int* compressedPayloadSize);
+int* extractPayload(const Pixel* pixels, int numPixels, int* compressedPayloadSize);
+void embedPayload(Pixel* pixels, int numPixels, const int* compressedPayload, int compressedSize);
 bool is_png(FILE *file);
 bool is_bmp(FILE *file);
 bool is_24bit_bmp(FILE *file);
@@ -60,20 +68,20 @@ void freeDictionary();
 void addBytesToDictionary(const unsigned char *bytes, int length);
 int findBytesCode(const unsigned char *bytes, int length);
 int* lzwCompress(const unsigned char *input, int *size);
-unsigned char* lzwDecompress(const int *codes, int size);
 unsigned char* getBytesFromCode(int code, int *length);
 void setLSB(unsigned char* byte, int bitValue);
 int getBit(const int* data, int size, int position);
-void embedPayload(unsigned char* pixelData, int pixelDataSize, const int* compressedPayload, int compressedSize);
+//void embedPayload(unsigned char* pixelData, int pixelDataSize, const int* compressedPayload, int compressedSize);
 //void extractPayload(unsigned char* pixelData, int pixelDataSize, int* extractedPayload, int compressedSize);
-unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
+//unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
 int openAndValidateBMP(const char* filename, BITMAPFILEHEADER* bfh, BITMAPINFOHEADER* bih);
 // Function prototype for reading pixel data from a BMP file
-unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
+//unsigned char* readPixelData(FILE* file, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, int* pixelDataSize);
 int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, unsigned char* pixelData, int pixelDataSize);
-int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressedPayloadSize);
-unsigned int extractSizeFromPixelData(unsigned char* pixelData);
+//int* extractPayload(unsigned char* pixelData, int pixelDataSize, int* compressedPayloadSize);
+//unsigned int extractSizeFromPixelData(unsigned char* pixelData, int numPixels);
 //void saveDecompressedPayload(const char* baseFilename, const unsigned char* decompressedPayload, int decompressedPayloadSize);
 void saveDecompressedPayload(const unsigned char* decompressedPayload, int decompressedPayloadSize);
 int compareFiles(const char *file1, const char *file2);
+unsigned int extractSizeFromPixelData(const Pixel* pixels, int numPixels);
 #endif
