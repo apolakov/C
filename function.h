@@ -84,4 +84,17 @@ int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, 
 void saveDecompressedPayload(const unsigned char* decompressedPayload, int decompressedPayloadSize);
 int compareFiles(const char *file1, const char *file2);
 unsigned int extractSizeFromPixelData(const Pixel* pixels, int numPixels);
+void embedSize(Pixel* pixels, unsigned int size);
+int determineFileTypeAndCheck24Bit(const char *filename);
+//int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize);
+//int extractAndDecompressPayload(const char* inputImageFilename, const char* outputPayloadFilename);
+unsigned char* lzwDecompress(const int *codes, int size, int* decompressedSize);
+int comparePayloads(const int* payload1, const int* payload2, int size);
+int* loadOriginalCompressedPayload(const char* filename, int* size);
+int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize, const char* payloadFilename);
+int embedFileType(Pixel* pixels, const char* fileType);
+int extractFileType(Pixel* pixels, char* fileType);
+int extractAndDecompressPayload(const char* inputImageFilename, const char* outputPayloadBaseFilename);
+const char* getFileExtension(const char* filename);
+
 #endif

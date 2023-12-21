@@ -1,27 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <png.h>
 #include "function.h"
+#include <png.h>
 
 #define TABLE_SIZE 16384
 #define MAX_CHAR 256
 
-void embedSize(Pixel* pixels, unsigned int size);
-int determineFileTypeAndCheck24Bit(const char *filename);
-//int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize);
-//int extractAndDecompressPayload(const char* inputImageFilename, const char* outputPayloadFilename);
-unsigned char* lzwDecompress(const int *codes, int size, int* decompressedSize);
-int comparePayloads(const int* payload1, const int* payload2, int size);
-int* loadOriginalCompressedPayload(const char* filename, int* size);
-int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize, const char* payloadFilename);
-int embedFileType(Pixel* pixels, const char* fileType);
-int extractFileType(Pixel* pixels, char* fileType);
-int extractAndDecompressPayload(const char* inputImageFilename, char* outputPayloadFilename);
-const char* getFileExtension(const char* filename);
+unsigned char* readBinaryPayloadData(const char* filename, int* size);
+int writeBinaryPayloadData(const char* filename, const unsigned char* data, int size);
 
-
-int main() {
+    int main() {
     const char* imageFilename = "../bmp24.bmp";
     const char* payloadFilename = "../k.txt";
     const char* outputImageFilename = "../output.bmp";
@@ -286,8 +275,7 @@ int embedPayloadInImage(const char* imageFilename, const char* outputImageFilena
 
 
 
-int extractAndDecompressPayload(const char* inputImageFilename, char* outputPayloadBaseFilename) {    // Step 1: Read the image and extract pixel data
-    BITMAPFILEHEADER bfh;
+int extractAndDecompressPayload(const char* inputImageFilename, const char* outputPayloadBaseFilename) {    BITMAPFILEHEADER bfh;
     BITMAPINFOHEADER bih;
     int pixelDataSize;
     FILE* inputFile = fopen(inputImageFilename, "rb");
@@ -401,4 +389,42 @@ int comparePayloads(const int* payload1, const int* payload2, int size) {
         }
     }
     return 1; // Return 1 if match
+}
+
+unsigned char* readBinaryPayloadData(const char* filename, int* size) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) {
+        fprintf(stderr, "Failed to open payload file.\n");
+        return NULL;
+    }
+
+    // Determine the file size
+    fseek(file, 0, SEEK_END);
+    *size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    // Allocate memory for the payload
+    unsigned char* data = (unsigned char*)malloc(*size);
+    if (!data) {
+        fprintf(stderr, "Memory allocation failed for payload.\n");
+        fclose(file);
+        return NULL;
+    }
+
+    // Read the payload into the buffer
+    fread(data, 1, *size, file);
+    fclose(file);
+    return data;
+}
+
+int writeBinaryPayloadData(const char* filename, const unsigned char* data, int size) {
+    FILE* file = fopen(filename, "wb");
+    if (!file) {
+        fprintf(stderr, "Failed to open file for writing payload.\n");
+        return 1;
+    }
+
+    fwrite(data, 1, size, file);
+    fclose(file);
+    return 0;
 }
