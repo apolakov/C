@@ -1,6 +1,5 @@
 #include "files.h"
 #include <stdio.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 //#include "function.h"
@@ -49,11 +48,13 @@ int embedPayloadInImage(const char* imageFilename, const char* outputImageFilena
 
 
     // Embed file type
+    /*
     if (embedFileType(pixels, fileType) != 0) {
         fprintf(stderr, "Failed to embed file type.\n");
         free(pixels);
         return 1;
     }
+     */
 
     int numPixels = pixelDataSize / sizeof(Pixel);
     int payloadBits = compressedSize * 32; // Payload size in bits
@@ -102,19 +103,6 @@ int extractAndDecompressPayload(const char* inputImageFilename, const char* outp
     }
 
 
-    char fileType[4]; // Assuming fileType is 3 characters + null terminator
-    printf("extractAndDecompressPayload-> start extracting file type\n");
-    if (extractFileType(pixels, fileType) != 0) {
-        fprintf(stderr, "Failed to extract file type.\n");
-        free(pixels);
-        return 1;
-    }
-
-    // Construct the correct output filename based on the extracted file type
-    char outputPayloadFilename[256]; // Adjust size as necessary
-    snprintf(outputPayloadFilename, sizeof(outputPayloadFilename), "%s.%s", outputPayloadBaseFilename, fileType);
-
-
     // Step 2: Extract compressed payload from pixel data
     int compressedPayloadSize;
     printf("extractAndDecompressPayload-> start extracting payload\n");
@@ -137,7 +125,7 @@ int extractAndDecompressPayload(const char* inputImageFilename, const char* outp
 
     // Step 4: Save the decompressed payload to a file
     printf("extractAndDecompressPayload-> start saving decompressed payload\n");
-    FILE* outputFile = fopen(outputPayloadFilename, "wb");
+    FILE* outputFile = fopen(outputPayloadBaseFilename, "wb");
     if (!outputFile) {
         fprintf(stderr, "Failed to open output file for decompressed payload.\n");
         free(decompressedPayload);
@@ -254,6 +242,7 @@ void embedSize(Pixel* pixels, unsigned int size) {
     }
 }
 
+/*
 int embedFileType(Pixel* pixels, const char* fileType) {
     for (int i = 0; i < 24; ++i) {
         int bit = (fileType[i / 8] >> (i % 8)) & 1;
@@ -261,7 +250,8 @@ int embedFileType(Pixel* pixels, const char* fileType) {
     }
     return 0;
 }
-
+ */
+/*
 int extractFileType(Pixel* pixels, char* fileType) {
     // Extract a 3-character file type from the first 24 pixels
     for (int i = 0; i < 24; ++i) {
@@ -271,6 +261,7 @@ int extractFileType(Pixel* pixels, char* fileType) {
     fileType[3] = '\0'; // Null-terminate the string
     return 0;
 }
+ */
 
 void setLSB(unsigned char* byte, int bitValue) {
     // Ensure the bitValue is either 0 or 1
