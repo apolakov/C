@@ -5,7 +5,7 @@
 #include "function.h"
 #include <stdlib.h>
 #include "files.h"
-#include "embeding.h"
+#include "bmp.h"
 
 
 int determineFileTypeAndCheck24Bit(const char *filename) {
@@ -131,15 +131,25 @@ bool is_24bit_bmp(FILE *file) {
 int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, unsigned char* pixelData, int pixelDataSize) {
     FILE* file = fopen(filename, "wb");  // Open the file in binary write mode
     if (!file) {
-        fprintf(stderr, "Unable to open output file.\n");
+        fprintf(stderr, "Unable to open output file: %s\n", filename);
         return 0;  // Return 0 on failure
     }
 
     // Write the BMP file header
-    fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, file);
+    size_t bytesWritten = fwrite(&bfh, sizeof(BITMAPFILEHEADER), 1, file);
+    if (bytesWritten != 1) {
+        fprintf(stderr, "Failed to write BMP file header.\n");
+        fclose(file);
+        return 0;
+    }
 
     // Write the BMP info header
-    fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, file);
+    bytesWritten = fwrite(&bih, sizeof(BITMAPINFOHEADER), 1, file);
+    if (bytesWritten != 1) {
+        fprintf(stderr, "Failed to write BMP info header.\n");
+        fclose(file);
+        return 0;
+    }
 
     int padding = (4 - (bih.width * 3) % 4) % 4;
     unsigned char pad[3] = {0};
@@ -149,15 +159,20 @@ int saveImage(const char* filename, BITMAPFILEHEADER bfh, BITMAPINFOHEADER bih, 
         unsigned char* rowData = pixelData + (bih.width * 3) * i;
 
         // Write one row of pixels at a time
-        size_t bytesWritten = fwrite(rowData, 1, bih.width * 3, file);
+        bytesWritten = fwrite(rowData, 1, bih.width * 3, file);
         if (bytesWritten != bih.width * 3) {
-            fprintf(stderr, "Failed to write pixel data.\n");
+            fprintf(stderr, "Failed to write pixel data for row %d.\n", i);
             fclose(file);
             return 0;
         }
 
         // Write the padding
-        fwrite(pad, 1, padding, file);
+        bytesWritten = fwrite(pad, 1, padding, file);
+        if (bytesWritten != padding) {
+            fprintf(stderr, "Failed to write padding for row %d.\n", i);
+            fclose(file);
+            return 0;
+        }
     }
 
     fclose(file);

@@ -77,8 +77,15 @@ build CMakeFiles/semestralkaplsplspls.dir/files.c.obj: C_COMPILER__semestralkapl
   OBJECT_DIR = CMakeFiles\semestralkaplsplspls.dir
   OBJECT_FILE_DIR = CMakeFiles\semestralkaplsplspls.dir
 
-build CMakeFiles/semestralkaplsplspls.dir/embeding.c.obj: C_COMPILER__semestralkaplsplspls_Debug D$:/C/semestralkaplsplspls/embeding.c || cmake_object_order_depends_target_semestralkaplsplspls
-  DEP_FILE = CMakeFiles\semestralkaplsplspls.dir\embeding.c.obj.d
+build CMakeFiles/semestralkaplsplspls.dir/bmp.c.obj: C_COMPILER__semestralkaplsplspls_Debug D$:/C/semestralkaplsplspls/bmp.c || cmake_object_order_depends_target_semestralkaplsplspls
+  DEP_FILE = CMakeFiles\semestralkaplsplspls.dir\bmp.c.obj.d
+  FLAGS = -g -std=gnu99
+  INCLUDES = -ID:/C/semestralkaplsplspls/pnglib/vcpkg/installed/x64-windows/include
+  OBJECT_DIR = CMakeFiles\semestralkaplsplspls.dir
+  OBJECT_FILE_DIR = CMakeFiles\semestralkaplsplspls.dir
+
+build CMakeFiles/semestralkaplsplspls.dir/png.c.obj: C_COMPILER__semestralkaplsplspls_Debug D$:/C/semestralkaplsplspls/png.c || cmake_object_order_depends_target_semestralkaplsplspls
+  DEP_FILE = CMakeFiles\semestralkaplsplspls.dir\png.c.obj.d
   FLAGS = -g -std=gnu99
   INCLUDES = -ID:/C/semestralkaplsplspls/pnglib/vcpkg/installed/x64-windows/include
   OBJECT_DIR = CMakeFiles\semestralkaplsplspls.dir
@@ -92,7 +99,7 @@ build CMakeFiles/semestralkaplsplspls.dir/embeding.c.obj: C_COMPILER__semestralk
 #############################################
 # Link the executable semestralkaplsplspls.exe
 
-build semestralkaplsplspls.exe: C_EXECUTABLE_LINKER__semestralkaplsplspls_Debug CMakeFiles/semestralkaplsplspls.dir/main.c.obj CMakeFiles/semestralkaplsplspls.dir/function.c.obj CMakeFiles/semestralkaplsplspls.dir/lzw.c.obj CMakeFiles/semestralkaplsplspls.dir/files.c.obj CMakeFiles/semestralkaplsplspls.dir/embeding.c.obj | ../pnglib/vcpkg/installed/x64-windows/debug/lib/libpng16d.lib
+build semestralkaplsplspls.exe: C_EXECUTABLE_LINKER__semestralkaplsplspls_Debug CMakeFiles/semestralkaplsplspls.dir/main.c.obj CMakeFiles/semestralkaplsplspls.dir/function.c.obj CMakeFiles/semestralkaplsplspls.dir/lzw.c.obj CMakeFiles/semestralkaplsplspls.dir/files.c.obj CMakeFiles/semestralkaplsplspls.dir/bmp.c.obj CMakeFiles/semestralkaplsplspls.dir/png.c.obj | ../pnglib/vcpkg/installed/x64-windows/debug/lib/libpng16d.lib
   FLAGS = -g
   LINK_LIBRARIES = ../pnglib/vcpkg/installed/x64-windows/debug/lib/libpng16d.lib  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\semestralkaplsplspls.dir

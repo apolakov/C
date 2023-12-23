@@ -2,8 +2,8 @@
 // Created by alena on 22.12.2023.
 //
 
-#ifndef SEMESTRALKAPLSPLSPLS_EMBEDING_H
-#define SEMESTRALKAPLSPLSPLS_EMBEDING_H
+#ifndef SEMESTRALKAPLSPLSPLS_BMP_H
+#define SEMESTRALKAPLSPLSPLS_BMP_H
 
 
 #include <stdio.h>
@@ -61,4 +61,4 @@ int getBit(const int* data, int size, int position);
 
 
 
-#endif //SEMESTRALKAPLSPLSPLS_EMBEDING_H
+#endif //SEMESTRALKAPLSPLSPLS_BMP_H

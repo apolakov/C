@@ -5,7 +5,7 @@
 //#include "function.h"
 #include <stdlib.h>
 #include "lzw.h"
-#include "embeding.h"
+#include "bmp.h"
 
 int embedPayloadInImage(const char* imageFilename, const char* outputImageFilename, const int* compressedPayload, int compressedSize, const char* payloadFilename) {
     BITMAPFILEHEADER bfh;
@@ -27,7 +27,7 @@ int embedPayloadInImage(const char* imageFilename, const char* outputImageFilena
     int padding = (4 - (bih.width * 3) % 4) % 4;
 
     // Calculate the total pixel data size, including padding
-    pixelDataSize = (bih.width * 3 + padding) * abs(bih.height);
+    pixelDataSize = bih.width * abs(bih.height) * 3 + padding * abs(bih.height);
 
     Pixel *pixels = readPixelData(inputFile, bfh, bih, &pixelDataSize);
     fclose(inputFile);
@@ -146,8 +146,13 @@ const char* getFileExtension(const char* filename) {
 }
 
 int* extractPayload(const Pixel* pixels, int numPixels, int* compressedPayloadSize) {
+
     unsigned int payloadBitSize = extractSizeFromPixelData(pixels, numPixels);
-    *compressedPayloadSize = (payloadBitSize + 31) / 32;
+    printf("PAYLOADBITSIZE (before adding 31): %u\n", payloadBitSize);
+    unsigned int adjustedSize = payloadBitSize + 31;
+    printf("Adjusted size (PAYLOADBITSIZE + 31): %u\n", adjustedSize);
+    *compressedPayloadSize = adjustedSize / 32;
+    printf("COMPRESSEDPAYLOADSIZE (after division): %d\n", *compressedPayloadSize);
 
     int* payload = (int*)malloc(*compressedPayloadSize * sizeof(int));
     if (!payload) {
@@ -176,11 +181,23 @@ int* extractPayload(const Pixel* pixels, int numPixels, int* compressedPayloadSi
 }
 
 unsigned int extractSizeFromPixelData(const Pixel* pixels, int numPixels) {
+    if (numPixels < 32) {
+        fprintf(stderr, "Not enough pixels to extract payload size.\n");
+        return 0; // Not enough pixels to extract the size
+    }
+
     unsigned int size = 0;
     for (int i = 0; i < 32; ++i) {
         unsigned int bit = pixels[i].blue & 1;
         size |= (bit << i);
+
+        // Debugging: Print each bit and the cumulative size
+        printf("Bit %d from pixel %d: %u, Cumulative size: %u\n", i, bit, size);
     }
+
+    // Debugging: Print the final extracted size
+    printf("Final extracted size: %u\n", size);
+
     return size;
 }
 
@@ -235,33 +252,16 @@ void embedPayload(Pixel* pixels, int numPixels, const int* compressedPayload, in
     }
 }
 
-
 void embedSize(Pixel* pixels, unsigned int size) {
     for (int i = 0; i < 32; ++i) {
-        setLSB(&pixels[i].blue, (size >> i) & 1);
+        unsigned int bit = (size >> i) & 1;
+        setLSB(&pixels[i].blue, bit);
+
+        // Debugging: Print each bit and the modified pixel value
+        printf("Embedding bit %u at pixel %d, Modified Pixel Value: %02x\n", bit, i, pixels[i].blue);
     }
 }
 
-/*
-int embedFileType(Pixel* pixels, const char* fileType) {
-    for (int i = 0; i < 24; ++i) {
-        int bit = (fileType[i / 8] >> (i % 8)) & 1;
-        setLSB(&pixels[i].blue, bit);
-    }
-    return 0;
-}
- */
-/*
-int extractFileType(Pixel* pixels, char* fileType) {
-    // Extract a 3-character file type from the first 24 pixels
-    for (int i = 0; i < 24; ++i) {
-        int bit = pixels[i].blue & 1;
-        fileType[i / 8] |= (bit << (i % 8));
-    }
-    fileType[3] = '\0'; // Null-terminate the string
-    return 0;
-}
- */
 
 void setLSB(unsigned char* byte, int bitValue) {
     // Ensure the bitValue is either 0 or 1

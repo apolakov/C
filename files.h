@@ -4,7 +4,7 @@
 
 #ifndef SEMESTRALKAPLSPLSPLS_FILES_H
 #define SEMESTRALKAPLSPLSPLS_FILES_H
-#include "embeding.h"
+#include "bmp.h"
 #include <stdbool.h>
 
 

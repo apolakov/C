@@ -4,8 +4,9 @@
 #include "function.h"
 #include "lzw.h"
 #include "files.h"
-#include "embeding.h"
+#include "bmp.h"
 #include <png.h>
+#include "pngs.h"
 
 #define TABLE_SIZE 16384
 #define MAX_CHAR 256
@@ -14,6 +15,8 @@ int writeBinaryPayloadData(const char* filename, const unsigned char* data, int 
 void printData(const unsigned char* data, int size, const char* label);
 
 int main() {
+
+    /*
     const char* imageFilename = "../bmp24.bmp";
     const char* payloadFilename = "../k.txt";
     const char* outputImageFilename = "../output.bmp";
@@ -63,20 +66,83 @@ int main() {
         return 1;
     }
 
+    /*
     // Step 6: Compare the original and decompressed payloads
     printf("start step6\n");
     int newPayloadSize;
     unsigned char* newPayload = readBinaryPayloadData(decompressedPayloadFilename, &newPayloadSize);
+    printf("Original Payload:\n");
+    for (int i = 0; i < payloadSize; i++) {
+        printf("%02x ", payloadData[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+    }
+    printf("\n");
+
+    printf("Decompressed Payload:\n");
+    for (int i = 0; i < newPayloadSize; i++) {
+        printf("%02x ", newPayload[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+    }
+    printf("\n");
     if (newPayloadSize != payloadSize || memcmp(payloadData, newPayload, payloadSize) != 0) {
         fprintf(stderr, "The original and decompressed payloads do not match.\n");
         free(newPayload);
         return 1;
     }
 
+
     printf("The original and decompressed payloads match. Success!\n");
 
     free(newPayload);
+     */
+
+
+    const char* file_name = "../images.png";
+
+    if (determineFileTypeAndCheck24Bit(file_name)) {
+        fprintf(stderr, "File is not a 24-bit BMP or PNG.\n");
+        return 1;
+    }
+
+    FILE *fp = fopen(file_name, "rb");
+    if (!fp) {
+        fprintf(stderr, "Could not open file %s for reading.\n", file_name);
+        return 1;
+    }
+
+
+    png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+    if (!png) {
+        fprintf(stderr, "Failed to create PNG read structure.\n");
+        fclose(fp);
+        return 1;
+    }
+
+
+    png_infop info = png_create_info_struct(png);
+    if (!info) {
+        fprintf(stderr, "Failed to create PNG info structure.\n");
+        png_destroy_read_struct(&png, NULL, NULL);
+        fclose(fp);
+        return 1;
+    }
+
+    if (setjmp(png_jmpbuf(png))) {
+        fprintf(stderr, "Error during PNG read initialization.\n");
+        png_destroy_read_struct(&png, &info, NULL);
+        fclose(fp);
+        return 1;
+    }
+
+    png_init_io(png, fp);
+    png_read_info(png, info);
+
+    png_destroy_read_struct(&png, &info, NULL);
+    fclose(fp);
     return 0;
+
+
+
 }
 
 

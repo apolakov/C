@@ -5,7 +5,7 @@
 //#include "function.h"
 #include <stdlib.h>
 #include "lzw.h"
-#include "embeding.h"
+#include "bmp.h"
 
 #define MAX_CHAR 256
 #define TABLE_SIZE 4096
@@ -17,13 +17,15 @@ int nextAvailableCode = 0;
 int* lzwCompress(const unsigned char* input, int size, int* outputSize) {
     initializeDictionary();
 
+    printf("Compress 20");
     unsigned char currentString[MAX_CHAR + 1] = {0};
     int currentLength = 0;
     int* output = (int*)malloc(TABLE_SIZE * sizeof(int));
     int outputIndex = 0;
-
+    printf("Compress 25");
     int lastFoundCode = -1;
     for (int i = 0; i < size; i++) {
+        printf("%d\n",i);
         currentString[currentLength] = input[i];
         currentLength++;
 
@@ -42,6 +44,7 @@ int* lzwCompress(const unsigned char* input, int size, int* outputSize) {
             lastFoundCode = findBytesCode(currentString, currentLength);
         }
     }
+    printf("Compress 46");
 
     if (lastFoundCode != -1) {
         output[outputIndex++] = lastFoundCode;
@@ -85,7 +88,7 @@ unsigned char* lzwDecompress(const int* codes, int size, int* decompressedSize) 
             unsigned char newString[MAX_CHAR + 1];
             int newLength = table[code]->length + 1;
             memcpy(newString, table[code]->bytes, table[code]->length);
-            newString[newLength - 1] = table[codes[i + 1]]->bytes[0];
+            newString[newLength - 1] = table[codes[i+1]]->bytes[0];
             addBytesToDictionary(newString, newLength);
         }
     }
